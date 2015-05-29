@@ -896,4 +896,13 @@ public class HAProxyMessageDecoderTest {
         assertNull(ch.readInbound());
         assertFalse(ch.finish());
     }
+
+    @Test
+    public void testIsValidHeader() {
+        final String validHeader = "PROXY TCP4 192.168.0.1 192.168.0.11 56324 443\r\n";
+        assertTrue(HAProxyMessageDecoder.isValidHeader(copiedBuffer(validHeader, CharsetUtil.US_ASCII)));
+
+        final String invalidHeader = "Invalid header";
+        assertFalse(HAProxyMessageDecoder.isValidHeader(copiedBuffer(invalidHeader, CharsetUtil.US_ASCII)));
+    }
 }

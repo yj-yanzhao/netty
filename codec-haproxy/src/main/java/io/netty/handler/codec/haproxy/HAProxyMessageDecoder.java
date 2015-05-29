@@ -72,6 +72,14 @@ public class HAProxyMessageDecoder extends ByteToMessageDecoder {
             (byte) 0x0A
     };
 
+    private static final byte[] TEXT_PREFIX = {
+            (byte) 'P',
+            (byte) 'R',
+            (byte) 'O',
+            (byte) 'X',
+            (byte) 'Y',
+    };
+
     /**
      * Binary header prefix length
      */
@@ -147,15 +155,7 @@ public class HAProxyMessageDecoder extends ByteToMessageDecoder {
         }
 
         int idx = buffer.readerIndex();
-
-        for (int i = 0; i < BINARY_PREFIX_LENGTH; i++) {
-            final byte b = buffer.getByte(idx + i);
-            if (b != BINARY_PREFIX[i]) {
-                return 1;
-            }
-        }
-
-        return buffer.getByte(idx + BINARY_PREFIX_LENGTH);
+        return match(BINARY_PREFIX, buffer, idx) ? buffer.getByte(idx + BINARY_PREFIX_LENGTH) : 1;
     }
 
     /**
@@ -356,5 +356,37 @@ public class HAProxyMessageDecoder extends ByteToMessageDecoder {
             ppex = new HAProxyProtocolException();
         }
         throw ppex;
+    }
+
+    /**
+     * Returns {@code true} if the given {@link ByteBuf} is a valid HAProxy header.
+     * Be aware that this method will not increase the readerIndex of the given {@link ByteBuf}.
+     *
+     * @param buffer
+     *                  The {@link ByteBuf} to read from. Be aware that it must have at least 12 bytes to read,
+     *                  otherwise it will throw an {@link IllegalArgumentException}.
+     * @return isValid
+     *                  {@code true} if the {@link ByteBuf} is a valid HAProxy header, {@code false} otherwise.
+     * @throws IllegalArgumentException
+     *                  Is thrown if the given {@link ByteBuf} has not at least 12 bytes to read.
+     */
+    public static boolean isValidHeader(final ByteBuf buffer) {
+        if (buffer.readableBytes() < 12) {
+            throw new IllegalArgumentException("buffer must have at least 12 readable bytes");
+        }
+
+        int idx = buffer.readerIndex();
+
+        return match(BINARY_PREFIX, buffer, idx) || match(TEXT_PREFIX, buffer, idx);
+    }
+
+    private static boolean match(byte[] prefix, ByteBuf buffer, int idx) {
+        for (int i = 0; i < prefix.length; i++) {
+            final byte b = buffer.getByte(idx + i);
+            if (b != prefix[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 }
