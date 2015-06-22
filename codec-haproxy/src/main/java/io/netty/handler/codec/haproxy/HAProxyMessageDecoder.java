@@ -19,6 +19,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.LineBasedFrameDecoder;
+import io.netty.handler.codec.ProtocolDetectionResult;
 import io.netty.util.CharsetUtil;
 
 import java.util.List;
@@ -84,6 +85,18 @@ public class HAProxyMessageDecoder extends ByteToMessageDecoder {
      * Binary header prefix length
      */
     private static final int BINARY_PREFIX_LENGTH = BINARY_PREFIX.length;
+
+    /**
+     * {@link ProtocolDetectionResult} for {@link HAProxyProtocolVersion#V1}.
+     */
+    private static final ProtocolDetectionResult<HAProxyProtocolVersion> DETECTION_RESULT_V1 =
+            ProtocolDetectionResult.detected(HAProxyProtocolVersion.V1);
+
+    /**
+     * {@link ProtocolDetectionResult} for {@link HAProxyProtocolVersion#V2}.
+     */
+    private static final ProtocolDetectionResult<HAProxyProtocolVersion> DETECTION_RESULT_V2 =
+            ProtocolDetectionResult.detected(HAProxyProtocolVersion.V2);
 
     /**
      * {@code true} if we're discarding input because we're already over maxLength
@@ -359,25 +372,22 @@ public class HAProxyMessageDecoder extends ByteToMessageDecoder {
     }
 
     /**
-     * Returns {@code true} if the given {@link ByteBuf} is a valid HAProxy header.
-     * Be aware that this method will not increase the readerIndex of the given {@link ByteBuf}.
-     *
-     * @param buffer
-     *                  The {@link ByteBuf} to read from. Be aware that it must have at least 12 bytes to read,
-     *                  otherwise it will throw an {@link IllegalArgumentException}.
-     * @return isValid
-     *                  {@code true} if the {@link ByteBuf} is a valid HAProxy header, {@code false} otherwise.
-     * @throws IllegalArgumentException
-     *                  Is thrown if the given {@link ByteBuf} has not at least 12 bytes to read.
+     * Returns the {@link ProtocolDetectionResult} for the given {@link ByteBuf}.
      */
-    public static boolean isValidHeader(final ByteBuf buffer) {
+    public static ProtocolDetectionResult<HAProxyProtocolVersion> detectProtocol(ByteBuf buffer) {
         if (buffer.readableBytes() < 12) {
-            throw new IllegalArgumentException("buffer must have at least 12 readable bytes");
+            return ProtocolDetectionResult.needsMoreData();
         }
 
         int idx = buffer.readerIndex();
 
-        return match(BINARY_PREFIX, buffer, idx) || match(TEXT_PREFIX, buffer, idx);
+        if (match(BINARY_PREFIX, buffer, idx)) {
+            return DETECTION_RESULT_V2;
+        }
+        if (match(TEXT_PREFIX, buffer, idx)) {
+            return DETECTION_RESULT_V1;
+        }
+        return ProtocolDetectionResult.invalid();
     }
 
     private static boolean match(byte[] prefix, ByteBuf buffer, int idx) {
